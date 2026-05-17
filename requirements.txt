@@ -1,8 +1,4 @@
 fastapi
 uvicorn
-beautifulsoup4
-requests
-sentence-transformers
-faiss-cpu
+scikit-learn
 numpy
-lxml
