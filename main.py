@@ -114,50 +114,49 @@ def is_refinement_request(message):
 # Intent detection
 # ------------------------------------------------------------------
 def detect_intent(messages):
-    latest = messages[-1]["content"].lower()
+    latest_content = messages[-1]["content"]
+
+    if isinstance(latest_content, dict):
+        latest = str(latest_content).lower()
+    else:
+        latest = latest_content.lower()
+
     user_turns = len([m for m in messages if m["role"] == "user"])
-    # Inside detect_intent, near the top:
-    if is_greeting(latest):
-        return "greeting"
 
-    # Refinement: user wants to add something after previous recommendations exist
-    if is_refinement_request(messages[-1]["content"]):
-        # Check if there's at least one previous assistant message with recommendations
-        for msg in reversed(messages[:-1]):
-            if msg["role"] == "assistant" and msg.get("recommendations"):
-                return "refinement"
-
-    if user_turns == 1 and is_vague_first_query(latest):
-        return "clarify"
-
+    # compare FIRST
     if "compare" in latest or "difference between" in latest:
         return "compare"
 
+    # confirmation SECOND
     confirmation_phrases = [
         "looks good",
         "lock it in",
         "locked in",
-        "confirmed",
         "confirm",
+        "confirmed",
         "that works",
         "sounds good",
         "finalize",
-        "finalise",
-        "go with this",
         "keep this",
-        "yes, that's perfect",
-        "thanks",
-        "thank you",
-        "perfect",
-        "that's all",
     ]
 
     if any(p in latest for p in confirmation_phrases):
         return "confirmation"
 
-    off_topic = ["salary", "fire employee", "lawsuit", "legal advice"]
-    if any(x in latest for x in off_topic):
+    # refusal
+    off_topic_keywords = [
+        "fire employee",
+        "terminate employee",
+        "salary dispute",
+        "lawsuit",
+    ]
+
+    if any(k in latest for k in off_topic_keywords):
         return "refuse"
+
+    # ONLY vague turn 1 after special intents checked
+    if user_turns == 1:
+        return "clarify"
 
     return "recommend"
 
@@ -336,17 +335,15 @@ def handle_refinement(messages):
 
 def get_last_recommendations(messages):
     for msg in reversed(messages):
-        if msg["role"] == "assistant" and msg.get("recommendations"):
-            return {
-                "reply": "Confirmed. Final shortlist locked.",
-                "recommendations": msg["recommendations"],
-                "end_of_conversation": True,
-            }
-    return {
-        "reply": "I couldn't find a previous shortlist to confirm.",
-        "recommendations": [],
-        "end_of_conversation": False,
-    }
+        if msg["role"] == "assistant":
+            content = msg.get("content")
+
+            if isinstance(content, dict):
+                recs = content.get("recommendations", [])
+                if recs:
+                    return recs
+
+    return []
 
 
 # ------------------------------------------------------------------
@@ -355,19 +352,27 @@ def get_last_recommendations(messages):
 def handle_chat(messages):
     intent = detect_intent(messages)
 
+    if intent == "confirmation":
+        recs = get_last_recommendations(messages)
+
+        if recs:
+            return {
+                "reply": "Confirmed. Final shortlist locked.",
+                "recommendations": recs,
+                "end_of_conversation": True,
+            }
+
+        return {
+            "reply": "I couldn't find a previous shortlist to confirm.",
+            "recommendations": [],
+            "end_of_conversation": False,
+        }
+
     if intent == "greeting":
         return {
             "reply": "Hello! I can help you find SHL assessments. Tell me about the role, skills, or seniority level you're hiring for.",
             "recommendations": [],
             "end_of_conversation": False,
-        }
-
-    if intent == "confirmation":
-        # Recompute recommendations from conversation or just end
-        return {
-            "reply": "Great! I'm glad I could help.",
-            "recommendations": [],  # or last recs if you can recompute
-            "end_of_conversation": True,
         }
 
     if intent == "clarify":
@@ -376,8 +381,7 @@ def handle_chat(messages):
         return handle_refinement(messages)
     if intent == "compare":
         return generate_compare(messages)
-    if intent == "confirmation":
-        return get_last_recommendations(messages)
+
     if intent == "refuse":
         return generate_refusal()
     # default
