@@ -1,28 +1,36 @@
-import faiss
 import pickle
-import numpy as np
-from sentence_transformers import SentenceTransformer
 
-model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
-
-index = faiss.read_index("shl_index.faiss", faiss.IO_FLAG_MMAP)
-
+# load metadata only
 with open("metadata.pkl", "rb") as f:
     metadata = pickle.load(f)
 
 
-def search_assessments(query, top_k=5):
-    query_embedding = model.encode([query])
-    query_embedding = np.array(query_embedding).astype("float32")
+def search_assessments(query, top_k=10):
+    query = query.lower()
 
-    distances, indices = index.search(query_embedding, top_k)
+    scored_results = []
 
-    results = []
+    for item in metadata:
+        text = (
+            item.get("name", "")
+            + " "
+            + item.get("description", "")
+            + " "
+            + item.get("test_type", "")
+        ).lower()
 
-    for idx in indices[0]:
-        results.append(metadata[idx])
+        score = 0
 
-    return results
+        for word in query.split():
+            if word in text:
+                score += 1
+
+        if score > 0:
+            scored_results.append((score, item))
+
+    scored_results.sort(key=lambda x: x[0], reverse=True)
+
+    return [item[1] for item in scored_results[:top_k]]
 
 
 if __name__ == "__main__":
@@ -35,5 +43,5 @@ if __name__ == "__main__":
     for i, result in enumerate(results, 1):
         print(f"{i}. {result['name']}")
         print(f"URL: {result['url']}")
-        print(f"Description: {result['description']}")
+        print(f"Description: {result.get('description', 'N/A')}")
         print("-" * 50)
