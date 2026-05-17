@@ -147,11 +147,16 @@ def detect_intent(messages):
         return "confirmation"
 
     # refusal
+
     off_topic_keywords = [
-        "fire employee",
-        "terminate employee",
-        "salary dispute",
+        "fire",
+        "terminate",
         "lawsuit",
+        "legal",
+        "sue",
+        "salary dispute",
+        "employment law",
+        "compliance requirement",
     ]
 
     if any(k in latest for k in off_topic_keywords):
@@ -188,7 +193,11 @@ def generate_compare(messages):
     # Extract assessment names: look for pattern "between X and Y"
     import re
 
-    match = re.search(r"between (.+?) and (.+?)(?:\?|\.|$)", latest, re.IGNORECASE)
+    match = re.search(
+        r"(?:between|compare)\s+(.+?)\s+(?:and|vs)\s+(.+?)(?:\?|\.|$)",
+        latest,
+        re.IGNORECASE,
+    )
     if not match:
         return {
             "reply": "Please specify two assessments to compare, e.g., 'What is the difference between OPQ and GSA?'",
@@ -374,28 +383,31 @@ def handle_chat(messages):
     # greeting
     if intent == "greeting":
         return {
-            "reply": "Hello! I can help you find SHL assessments. Tell me about the role you're hiring for.",
+            "reply": (
+                "Hello! I can help you find SHL assessments. "
+                "Tell me the role, skills, seniority level, or constraints."
+            ),
             "recommendations": [],
             "end_of_conversation": False,
         }
 
-    # clarify
+    # vague first query
     if intent == "clarify":
         return generate_clarification()
-
-    # refinement
-    if intent == "refinement":
-        return handle_refinement(messages)
 
     # compare
     if intent == "compare":
         return generate_compare(messages)
 
-    # refuse
+    # off-topic/legal refusal
     if intent == "refuse":
         return generate_refusal()
 
-    # default → recommend
+    # refinement/edit existing shortlist
+    if intent == "refinement":
+        return handle_refinement(messages)
+
+    # default recommendation flow
     return generate_recommendations(messages)
 
 
