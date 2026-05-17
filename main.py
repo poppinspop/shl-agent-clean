@@ -345,10 +345,20 @@ def handle_refinement(messages):
 
 
 def get_last_recommendations(messages):
+    """
+    Finds the most recent assistant message
+    containing recommendations.
+    """
+
     for msg in reversed(messages):
         if msg["role"] == "assistant":
-            content = msg.get("content")
 
+            # normal case:
+            if "recommendations" in msg and msg["recommendations"]:
+                return msg["recommendations"]
+
+            # fallback if recommendations somehow stored inside content dict
+            content = msg.get("content")
             if isinstance(content, dict):
                 recs = content.get("recommendations", [])
                 if recs:
