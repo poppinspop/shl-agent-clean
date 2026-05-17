@@ -114,85 +114,52 @@ def is_refinement_request(message):
 # Intent detection
 # ------------------------------------------------------------------
 def detect_intent(messages):
-    latest = messages[-1]["content"].lower()
+    latest_content = messages[-1]["content"]
+
+    if isinstance(latest_content, dict):
+        latest = str(latest_content).lower()
+    else:
+        latest = latest_content.lower()
+
     user_turns = len([m for m in messages if m["role"] == "user"])
 
-    # ----------------------------
-    # 1. OFF TOPIC / REFUSAL FIRST
-    # ----------------------------
+    if is_greeting(latest):
+        return "greeting"
+
+    # compare FIRST
+    if "compare" in latest or "difference between" in latest:
+        return "compare"
+
+    # confirmation SECOND
+    confirmation_phrases = [
+        "looks good",
+        "lock it in",
+        "locked in",
+        "confirm",
+        "confirmed",
+        "that works",
+        "sounds good",
+        "finalize",
+        "keep this",
+    ]
+
+    if any(p in latest for p in confirmation_phrases):
+        return "confirmation"
+
+    # refusal
     off_topic_keywords = [
-        "salary",
-        "legal",
-        "lawsuit",
-        "terminate employee",
         "fire employee",
-        "employee dispute",
-        "sue employee",
+        "terminate employee",
+        "salary dispute",
+        "lawsuit",
     ]
 
     if any(k in latest for k in off_topic_keywords):
         return "refuse"
 
-    # ----------------------------
-    # 2. COMPARISON
-    # ----------------------------
-    compare_keywords = ["compare", "difference between", "vs", "versus"]
-
-    if any(k in latest for k in compare_keywords):
-        return "compare"
-
-    # ----------------------------
-    # 3. CONFIRMATION
-    # ----------------------------
-    confirmation_keywords = [
-        "looks good",
-        "lock it in",
-        "confirmed",
-        "confirm",
-        "finalize",
-        "finalise",
-        "go with this",
-        "keep this",
-        "that works",
-        "sounds good",
-    ]
-
-    if any(k in latest for k in confirmation_keywords):
-        return "confirmation"
-
-    # ----------------------------
-    # 4. LANGUAGE CLARIFICATION
-    # ----------------------------
-    language_keywords = ["spanish", "bilingual", "french", "german", "portuguese"]
-
-    if any(k in latest for k in language_keywords):
-        return "language_clarification"
-
-    # ----------------------------
-    # 5. TIME CLARIFICATION
-    # ----------------------------
-    time_keywords = ["quick", "quickly", "short", "fast"]
-
-    if any(k in latest for k in time_keywords):
-        return "time_clarification"
-
-    # ----------------------------
-    # 6. ONLY NOW enforce no recommendations on vague turn 1
-    # ----------------------------
-    vague_keywords = [
-        "help me hire",
-        "need an assessment",
-        "hiring someone",
-        "recommend assessments",
-        "need hiring test",
-    ]
-
-    if user_turns == 1 and any(k in latest for k in vague_keywords):
+    if user_turns == 1 and is_vague_first_query(latest):
         return "clarify"
 
-    # ----------------------------
-    # 7. DEFAULT
-    # ----------------------------
     return "recommend"
 
 
@@ -387,6 +354,7 @@ def get_last_recommendations(messages):
 def handle_chat(messages):
     intent = detect_intent(messages)
 
+    # confirmation
     if intent == "confirmation":
         recs = get_last_recommendations(messages)
 
@@ -403,23 +371,31 @@ def handle_chat(messages):
             "end_of_conversation": False,
         }
 
+    # greeting
     if intent == "greeting":
         return {
-            "reply": "Hello! I can help you find SHL assessments. Tell me about the role, skills, or seniority level you're hiring for.",
+            "reply": "Hello! I can help you find SHL assessments. Tell me about the role you're hiring for.",
             "recommendations": [],
             "end_of_conversation": False,
         }
 
+    # clarify
     if intent == "clarify":
         return generate_clarification()
+
+    # refinement
     if intent == "refinement":
         return handle_refinement(messages)
+
+    # compare
     if intent == "compare":
         return generate_compare(messages)
 
+    # refuse
     if intent == "refuse":
         return generate_refusal()
-    # default
+
+    # default → recommend
     return generate_recommendations(messages)
 
 
